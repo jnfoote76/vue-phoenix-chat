@@ -5,6 +5,7 @@ defmodule Vuechat.Repo.Migrations.CreateMessage do
     create table(:messages) do
       add :username, :string
       add :body, :text
+      add :room, :integer
 
       timestamps()
     end

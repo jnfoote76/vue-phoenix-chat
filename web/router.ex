@@ -19,6 +19,11 @@ defmodule Vuechat.Router do
     get "/", PageController, :index
   end
 
+  scope "/api", Vuechat do
+    pipe_through :api
+    resources "/rooms", RoomController
+  end
+
   # Other scopes may use custom stacks.
   # scope "/api", Vuechat do
   #   pipe_through :api

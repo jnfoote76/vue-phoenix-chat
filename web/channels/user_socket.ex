@@ -2,7 +2,7 @@ defmodule Vuechat.UserSocket do
   use Phoenix.Socket
 
   ## Channels
-  channel "room:*", Vuechat.RoomChannel
+  channel "rooms:*", Vuechat.RoomChannel
 
   transport :websocket, Phoenix.Transports.WebSocket,
     timeout: 45_000

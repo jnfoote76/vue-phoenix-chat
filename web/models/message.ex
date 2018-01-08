@@ -4,6 +4,7 @@ defmodule Vuechat.Message do
   schema "messages" do
     field :username, :string
     field :body, :string
+    field :room, :integer
 
     timestamps()
   end

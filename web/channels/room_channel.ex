@@ -2,13 +2,24 @@ defmodule Vuechat.RoomChannel do
   use Vuechat.Web, :channel
   alias Vuechat.Presence
 
-  def join("room:lobby", payload, socket) do
-    send(self, :after_join)
-    {:ok, socket}
-  end
+  #def join("rooms:lobby", payload, socket) do
+#    send(self, :after_join)
+#    {:ok, socket}
+#  end
 
-  def join("room:" <> _private_room_id, _params, _socket) do
-    {:error, %{reason: "Unauthorized"}}
+  def join("rooms:" <> room_id_str, _params, socket) do
+    room_id = String.to_integer(room_id_str)
+    message_query =
+      from m in Vuechat.Message,
+      where: m.room == ^room_id
+
+    messages = Vuechat.Repo.all(message_query)
+    response = %{
+      messages: Phoenix.View.render_many(messages, Vuechat.MessageView, "message.json"),
+    }
+
+    send(self(), :after_join)
+    {:ok, response, assign(socket, :room, room_id)}
   end
 
   def handle_in("new_msg", %{"body" => body}, socket) do
@@ -19,7 +30,7 @@ defmodule Vuechat.RoomChannel do
     }
 
     broadcast! socket, "new_msg", message
-    %Vuechat.Message{body: message.body, username: message.username}
+    %Vuechat.Message{body: message.body, username: message.username, room: socket.assigns.room}
       |> Vuechat.Repo.insert
 
     {:noreply, socket}
@@ -35,22 +46,6 @@ defmodule Vuechat.RoomChannel do
       online_at: inspect(System.system_time(:milliseconds))
     })
     push socket, "presence_state", Presence.list(socket)
-
-    messages = Repo.all(
-      from m in Vuechat.Message,
-      limit: 10, order_by: [desc: :inserted_at]
-    )
-
-    Enum.each(Enum.reverse(messages), fn message ->
-      push socket, "new_msg", %{
-        "body" => message.body,
-        "username" => message.username,
-        "received_at" => message.inserted_at
-          |> Ecto.DateTime.to_erl
-          |> :calendar.datetime_to_gregorian_seconds
-          |> Kernel.-(62_167_219_200)
-      }
-    end)
 
     {:noreply, socket}
   end

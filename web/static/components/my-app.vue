@@ -2,9 +2,21 @@
   <div class="my-app">
     <div class="user-details" v-if="enterName">
       <h1>Vuechat</h1>
-      <label>Please enter your name:</label><br>
+      <label>Please select your room and enter your name:</label><br>
+      <label>Room: </label>
+      <select v-model="selectedRoom">
+        <option v-for="room in rooms" :value="room.id">{{room.name}}</option>
+        <option disabled>-----------</option>
+        <option :value="-1">Create New</option>
+      </select>
+      <span v-if="selectedRoom === -1">
+        <label>Room Name: </label>
+        <input type="text" v-model="newRoomName">
+      </span>
+      <label>Name: </label>
       <input type="text" v-model="username">
-      <button v-on:click="connectToChat">Next</button>
+      <button v-on:click="submitConnectForm">Next</button>
+      <div v-if="errorSubmitting"><strong>{{error}}</strong></div>
     </div>
     <div id="main-container" v-else>
       <users-list/>
@@ -22,13 +34,19 @@ import UsersList from "./users-list"
 import MessagesList from "./messages-list"
 
 export default {
+  created() {
+    this.getRooms()
+  },
   data() {
     return {
       socket: null,
       channel: null,
       message: "",
+      selectedRoom: -1,
+      newRoomName: "",
       username: "",
       enterName: true,
+      rooms: [],
     }
   },
   components: {
@@ -36,17 +54,47 @@ export default {
     'messages-list': MessagesList
   },
   methods: {
+    getRooms() {
+      // GET /someUrl
+      this.$http.get('/api/rooms').then(response => {
+
+        // get body data
+        this.rooms = response.body.data;
+        console.log("Got rooms!")
+        console.log(response)
+
+        }, response => {
+          console.log("Uh oh!")
+      });
+    },
     sendMessage() {
       this.channel.push("new_msg", { body: this.message })
       this.message = ''
     },
-    connectToChat() {
+    submitConnectForm() {
+      if(this.selectedRoom === -1) {
+        this.$http.post('/api/rooms', {room: {name: this.newRoomName}}).then(response => {
+
+          // get body data
+          console.log("Added new room!")
+          console.log(response.body.data)
+          console.log(response.body.data.id)
+          this.connectToChat(response.body.data.id)
+          }, response => {
+            this.error = response.body.errors[0]
+            console.log(response.body.errors)
+        });
+      } else {
+        this.connectToChat(this.selectedRoom)
+      }
+    },
+    connectToChat(id) {
       let presences = {}
       this.enterName = false
       this.socket = new Socket("/socket", {params: {username: this.username}}),
       this.socket.connect()
 
-      this.channel = this.socket.channel("room:lobby", {});
+      this.channel = this.socket.channel("rooms:" + id, {});
       this.channel.on("new_msg", payload => {
         this.$store.commit('addMessage', { payload });
       });
@@ -62,7 +110,23 @@ export default {
       })
 
       this.channel.join()
-        .receive("ok", response => { console.log("Joined successfully", response) })
+        .receive("ok", response => {
+          console.log("Joined successfully", response)
+          console.log("Length of response: " + response.messages.length)
+          for(var i = 0; i < response.messages.length; i++) {
+            let currMessage = response.messages[i]
+            console.log("username: " + currMessage.username)
+            console.log("body: " + currMessage.body)
+            console.log("inserted_at: " + currMessage.inserted_at)
+            this.$store.commit('addMessage', {
+              payload: {
+                body: currMessage.body,
+                username: currMessage.username,
+                received_at: currMessage.inserted_at,
+              }
+            })
+          }
+        })
         .receive("error", response => { console.log("Unable to join", response) })
     },
     assignUsers(presences) {
